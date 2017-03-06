@@ -87,7 +87,7 @@ chmod 644 /etc/yum.repos.d/lockss.repo
 rpm --import http://www.lockss.org/LOCKSS-GPG-RPM-KEY
 
 # Install the LOCKSS daemon, OpenJDK and supporting tools
-yum -yq install lockss-daemon java-1.7.0-openjdk tmux yum-cron 
+yum -y -q install lockss-daemon java-1.7.0-openjdk tmux yum-cron 
 
 # Enable LOCKSS and other services
 systemctl enable lockss
