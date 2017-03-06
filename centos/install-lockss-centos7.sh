@@ -70,8 +70,7 @@ createuser 'lockss'
 createuser 'lcap'
 
 # Allow lcap user to sudo
-usermod -G wheel lcap
-echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+echo "lcap ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/lcap
 
 # Install the LOCKSS RPM repository
 cat > /etc/yum.repos.d/lockss.repo <<'EOF'
@@ -88,14 +87,12 @@ chmod 644 /etc/yum.repos.d/lockss.repo
 rpm --import http://www.lockss.org/LOCKSS-GPG-RPM-KEY
 
 # Install the LOCKSS daemon, OpenJDK and supporting tools
-yum -yq install lockss-daemon java-1.7.0-openjdk screen yum-cron 
+yum -yq install lockss-daemon java-1.7.0-openjdk tmux yum-cron 
 
 # Enable LOCKSS and other services
 systemctl enable lockss
 systemctl enable yum-cron
-#systemctl start yum-cron
-#systemctl start lockss
 
 # Append firewall rules
-firewall-cmd --zone=public --addport=8080-8086/tcp --permanent
-firewall-cmd --zone=public --addport=9729/tcp --permanent
+firewall-cmd --zone=public --add-port=8080-8086/tcp --permanent
+firewall-cmd --zone=public --add-port=9729/tcp --permanent
