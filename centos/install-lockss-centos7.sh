@@ -1,5 +1,6 @@
 #!/bin/sh
-function writekeys {
+
+function WriteKeys {
 ( base64 -id | gunzip -c | cat > $1 ) <<'EOF'
 H4sIACv/300AA32Wx661xhKF5/cpPEc2OQ0smZzDJsOMnMMmw9Pf89sem1lLtLq66uu11rY1vxfb
 9hvz87Go+aYc3Oeo8bPiWMa8yVz5YucplMW4EG6ZQClLGFogHY3BG1WxlGlGIAEU+CE51VFn5JzA
@@ -51,11 +52,11 @@ Je+0SMf1r3ye9nLa4f/9HyASnPvWDQAA
 EOF
 }
 
-function createuser {
+function CreateUser {
 	useradd -r -m ${1}
 
 	mkdir -p /home/${1}/.ssh
-	writekeys /home/${1}/.ssh/authorized_keys
+	WriteKeys /home/${1}/.ssh/authorized_keys
 
 	chown -R ${1}:$(id -g ${1}) /home/${1}/.ssh
 	chmod 700 /home/${1}/.ssh
@@ -66,13 +67,16 @@ function createuser {
 }
 
 # Create the two LOCKSS users
-createuser 'lockss'
-createuser 'lcap'
+echo " * Creating user lockss..."
+CreateUser 'lockss'
+echo " * Creating user lcap..."
+CreateUser 'lcap'
 
 # Allow lcap user to sudo
 echo "lcap ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/lcap
 
 # Install the LOCKSS RPM repository
+echo " * Adding LOCKSS RPM repository..." 
 cat > /etc/yum.repos.d/lockss.repo <<'EOF'
 [lockss] 
 name = LOCKSS Daemon Repository 
@@ -84,15 +88,23 @@ EOF
 chmod 644 /etc/yum.repos.d/lockss.repo
 
 # Import the LOCKSS GPG key
+echo " * Importing LOCKSS GPG key..."
 rpm --import http://www.lockss.org/LOCKSS-GPG-RPM-KEY
 
 # Install the LOCKSS daemon, OpenJDK and supporting tools
-yum -y -q install lockss-daemon java-1.7.0-openjdk tmux yum-cron 
+echo " * Installing software..."
+yum -y -q install lockss-daemon java-1.8.0-openjdk tmux yum-cron 
 
 # Enable LOCKSS and other services
+echo " * Enabling lockss service..."
 systemctl enable lockss
+echo " * Enabling yum-cron service..."
 systemctl enable yum-cron
 
 # Append firewall rules
+echo " * Adjusting firewall..."
 firewall-cmd --zone=public --add-port=8080-8086/tcp --permanent
 firewall-cmd --zone=public --add-port=9729/tcp --permanent
+
+echo "* Done."
+
