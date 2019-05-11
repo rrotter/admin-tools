@@ -3,7 +3,7 @@
 ###
 Requirements - 
     Maven installed on your machine and in your path
-    access to the web as wel
+    access to the web for Maven dependencies
     Java installed on your machine and either in your path or with  JAVA_HOME set
 
 The install-titledb script is used to take one or more human readable *.tdb files in TDB1.0 syntax and generates a 
