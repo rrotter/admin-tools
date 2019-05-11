@@ -1,0 +1,291 @@
+#!/bin/sh
+
+# Copyright (c) 2000-2019, Board of Trustees of Leland Stanford Jr. University
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its contributors
+# may be used to endorse or promote products derived from this software without
+# specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+PROC_DISPLAY_USAGE () {
+  echo "Usage: ${0} [-tdbdir IDIR] [-outdir ODIR] [-outfile OFILE] [-dry-run] PNAME [TDBXMLOPTS...]"
+  echo "  PNAME           Use \$PNAME.txt as configuration input and default settings"
+  echo "  -tdbdir TDBDIR  Use  \$TDIR/*.tdb as well as *.tdb in any subdirectories as input"
+  echo "                  Default: as set in \$PNAME.txt or ./tdb/\$PNAME/"
+  echo "  -outdir ODIR    Put XML result under \$ODIR"
+  echo "                  Default: as set in \$PNAME.txt or current directory"
+  echo "  -outfile OFILE  Name XML result \$OFILE and it must have a .xml suffix"
+  echo "                  Default: as set in \$PNAME.txt or titledb.xml"
+  echo "  -dry-run        Display the name of the temporary directory containing the file(s) but don't install them"
+  echo "  TDBXMLOPTS      Options to pass to tdbxml"
+  echo "                  Default: as set in \$PNAME or --production (short form -P)"
+  echo "Example: (if you have your configuration set in lockss.txt"
+  echo "install-titledb lockss"
+}
+
+PROC_ERROR () {
+  echo "Error: $1" 1>&2
+  exit 1
+}
+
+
+## Should this be done as part of installation and not done here?
+PROC_GETTDBXML () {
+if [ "X${MAVENDIR}" = "X" ]; then
+  #maven will use the default, which is ~/.m2/repository
+  mvn dependency:get -Dartifact=org.lockss:lockss-tdb-processor:"${TDBXMLVERSION}"
+else
+  #use the designated repo
+  mvn dependency:get -Dmaven.repo.local="${MAVENDIR}" -Dartifact=org.lockss:lockss-tdb-processor:"${TDBXMLVERSION}"
+fi
+#TDBXMLDIR already includes the MAVENDIR setting (or default)
+mvn -f "${TDBXMLDIR}/${TDBXMLBASEFILE}".pom dependency:build-classpath -DincludeScope=runtime -Dmdep.outputFile="${TDBXMLBASEFILE}".cp
+}
+
+PROC_TDBXML () {
+#will run TDBXML over all arguments given to this function $*
+if [ ! -f $CLASSPATHFILE ]; then
+  PROC_ERROR "${CLASSPATHFILE} not found; check maven repository settings"
+  exit 1
+fi
+if [ "X${JAVA_HOME}" = "X" ]; then
+  JAVA=java
+else
+  JAVA=$JAVA_HOME/bin/java
+fi
+#lockss2.0
+$JAVA -Xmx1536m -classpath "${TDBXMLJAR}:"`cat $CLASSPATHFILE` org.lockss.tdb.TdbXml $*
+retval=$?
+return "$retval"
+}
+
+PROC_OWNERSHIP () {
+chgrp $WEBGRP $@
+chmod 664 $@
+if [ "X${CHCON}" != "X" ]; then
+  chcon -t "${CHCON}" $@
+fi
+}
+
+# command line overrides config file overrides defaults
+DRYRUN=""
+while true ; do
+
+  case "$1" in
+
+    -h|-help|--help)
+      PROC_DISPLAY_USAGE
+      exit 0;;
+
+    -tdbdir)
+      ARG_TDBDIR=$2
+      shift ; shift ; continue ;;
+
+    -outdir)
+      ARG_ODIR=$2
+      shift ; shift ; continue ;;
+    
+    -outfile)
+      ARG_OFILE=$2
+      shift ; shift ; continue ;;
+
+    -dry-run)
+      DRYRUN="1"
+      shift ; continue ;;
+    
+  esac
+  break
+done
+PNAME="$1"
+shift
+if [ "$#" != "0" ]; then
+    ARG_TDBXMLOPTS=$@
+fi
+
+if [ "X${PNAME}" = "X" ]; then
+  PROC_ERROR "Network configuration name is required"
+fi
+
+if [ ! -f ${PNAME}.txt ]; then
+  PROC_ERROR "You must have a configuration file ${PNAME}.txt"
+fi
+
+#establish the settings from the configuration file 
+source "${PNAME}.txt"
+echo "configuration MAVENDIR is ${MAVENDIR}"
+#Set up MAVENDIR or use the default
+if [ "X${MAVENDIR}" = "X" ]; then
+    hdir=$(cd ~ ; pwd)
+    PATH_MAVENDIR="${hdir}/.m2/repository"
+else 
+    #if a MAVENDIR was given, it must exist
+    if [ ! -d "$MAVENDIR" ]; then
+	PROC_ERROR "Defined MAVENDIR does not exist: $MAVENDIR. To use default, do not set a MAVENDIR"
+    fi
+
+    #make it absolute if the gave a relative path
+    mvdir=$(cd "${MAVENDIR}"; pwd)
+    MAVENDIR="${mvdir}"
+    PATH_MAVENDIR="${MAVENDIR}"
+fi
+echo "post normalization/default PATH MAVENDIR is ${PATH_MAVENDIR} and MAVENDIR is ${MAVENDIR}"
+TDBXMLDIR="${PATH_MAVENDIR}/org/lockss/lockss-tdb-processor/${TDBXMLVERSION}"
+TDBXMLBASEFILE="lockss-tdb-processor-${TDBXMLVERSION}"
+CLASSPATHFILE="${TDBXMLDIR}/${TDBXMLBASEFILE}.cp"
+TDBXMLJAR="${TDBXMLDIR}/${TDBXMLBASEFILE}.jar"
+
+#command line arguments will override configuration for TDBDIR,ODIR,OFILE, and TDBXMLOPTS
+if [ "X${ARG_TDBDIR}" != "X" ]; then
+    TDBDIR="${ARG_TDBDIR}"
+fi
+if [ "X${ARG_ODIR}" != "X" ]; then
+    ODIR="${ARG_ODIR}"
+fi
+if [ "X${ARG_OFILE}" != "X" ]; then
+    OFILE="${ARG_OFILE}"
+fi
+if [ "X${ARG_TDBXMLOPTS}" != "X" ]; then
+    TDBXMLOPTS="${ARG_TDBXMLOPTS}"
+fi
+
+#final fallback to defaults, only if not already set
+if [ "X${TDBDIR}" = "X" ]; then
+    TDBDIR="./tdb/${PNAME}/"
+fi
+if [ "X${ODIR}" = "X" ]; then
+    ODIR="."
+fi
+if [ "X${OFILE}" = "X" ]; then
+    OFILE="titledb.xml"
+fi
+if [ "X${TDBXMLOPTS}" = "X" ]; then
+    TDBXMLOPTS="-P"
+fi
+
+###
+# Check validity of input values
+###
+#Use maven to install or update the necessary tools (lockss-tdb-processor) and dependencies
+PROC_GETTDBXML
+
+if [ ! -d "$TDBXMLDIR" ]; then
+  PROC_ERROR "Maven repository exists, but the designated version of lockss-tdb-processor has not been installed: $TDBXMLDIR"
+fi
+if [ ! -f "$CLASSPATHFILE" ]; then  
+  PROC_ERROR "Maven repository exists, but the  lockss-tdb-processor classpath file has not been generated: $CLASSPATHFILE"
+fi
+if [ ! -d "$TDBDIR" ]; then
+  PROC_ERROR "Tdb directory does not exists: $TDBDIR"
+fi
+if [ ! -d "$ODIR" ]; then
+  PROC_ERROR "Output directory does not exists: $ODIR"
+fi
+if [[ $OFILE != *\.xml ]]; then
+  PROC_ERROR "Output filename must end in the suffix '.xml'"
+fi
+OBASE=$(basename "$OFILE" .xml)
+
+
+TMPDIR=`mktemp -d /tmp/tdbxml.XXXXXXXX`
+TMPFILE="${TMPDIR}/${OBASE}.xml"
+touch "${TMPFILE}"
+touch "${TMPFILE}.gz"
+PROC_OWNERSHIP "${TMPFILE}" "${TMPFILE}.gz" 
+
+PROC_TDBXML $TDBXMLOPTS $(ls "${TDBDIR}/"*.tdb) > "${TMPFILE}"
+
+if [ "$?" != "0" ]; then
+  exit 1 # Leave it at tdbxml's error message; tmpdir still there 
+fi
+
+#Process any existing 1st level subdirectories
+#this assumes directory names do not contain spaces
+#use of XNOTX is to avoid empty loop
+for fullsub in XNOTX $(find ${TDBDIR} -maxdepth 1 -mindepth 1 -type d)
+do
+  if [ -d $fullsub ] 
+  then
+      sub=$(basename "$fullsub")
+      TMPFILE="${TMPDIR}/${OBASE}-${sub}.xml"
+      touch "${TMPFILE}"
+      touch "${TMPFILE}.gz"
+      PROC_OWNERSHIP "${TMPFILE}" "${TMPFILE}.gz"
+      PROC_TDBXML $TDBXMLOPTS $(ls "${TDBDIR}/$sub/"*.tdb) > "${TMPFILE}"
+      if [ "$?" != "0" ]; then
+	  exit 1 # Leave it at tdbxml's error message; tmpdir still there
+      fi
+  fi
+done
+
+#Expose the temp location
+if [ "X${DRYRUN}" != "X" ]; then
+  echo "${TMPDIR}"
+  exit 0 #tmpdir left in place intentionally
+fi
+
+#validate all generated XML file in the temp location
+#before beginning to move files to dest location
+#exit if they fail
+for txml in ${TMPDIR}/*.xml
+do
+  xmllint -noout -valid "${txml}"
+  if [ "$?" != "0" ]; then
+    exit 1 # Leave it at xmllint's error message; tmpdir still there
+  fi
+done
+
+#For every generated XML file, move to destination if
+#the contents have changed
+for fullxml in ${TMPDIR}/*.xml
+do
+  txml=$(basename "$fullxml")
+  DSTFILE="${ODIR}/${txml}"
+  if [ ! -f "$DSTFILE" ]; then  
+      touch "$DSTFILE" # In case it doesn't exist, to avoid various errors below
+  fi
+
+  # compare old to new which will differ because of the timestamp
+  # we know this will be the first comment in the file and will be all on one line
+  if diff -I '<!--' "${fullxml}" "${DSTFILE}" &> /dev/null ; then
+  # Output is the same -- don't update
+    rm -f "${fullxml}" "${fullxml}.gz"
+    continue #no changes to this file
+  fi
+
+
+  #install the new version of this file
+  gzip -c "${fullxml}" > "${fullxml}.gz"
+  if [ "$?" != "0" ]; then
+    exit 1 # Leave it at gzip's error message; tmpdir still there
+  fi
+
+  # Install new output
+  mv "${DSTFILE}" "${DSTFILE}.last"
+  mv "${fullxml}" "${DSTFILE}"
+  mv "${fullxml}.gz" "${DSTFILE}.gz"
+done
+
+#except in cases where we exited due to an error, clean up the temporary directory
+rm -rf ${TMPDIR}

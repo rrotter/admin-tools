@@ -1,0 +1,52 @@
+###
+#Template configuation file for use with install-titledb
+###
+
+###
+# REQUIRED BLOCK
+# The following variables must be set in order to run install-titledb for a given network
+# There are no runtime arguments nor defaults for these and they must be set 
+#
+# The version of the lockss-tdb-processor package installed by maven
+#TDBXMLVERSION="1.2.0"
+# The permission group for the output file(s)
+#WEBGRP="apache"
+# The SELinux security context (optionally) to use - if left empty chcon will not be run on the output file(s)
+#CHCON="httpd_sys_content_t"
+#
+
+TDBXMLVERSION="1.2.0"
+WEBGRP="staff"
+CHCON=""
+
+###
+
+### 
+# OPTIONAL BLOCK
+# The following variables can be set here and/or set as runtime arguments
+# runtime arguments will take precedence over variables set in this file.
+# If set neither here nor as runtime arguments the defaults will be used
+#
+# A non-default location of the maven repository for the user running this script
+#MAVENDIR="/home/lockss/.m2/repository"
+# Default is "~/.m2/repository" for the current user
+#
+# The directory where the *.tdb files to be processed live
+#TDBDIR="/home/lockss/tdb/lockss"
+# Default is "./tdb/<thisbasefilename>", eg "./tdb/lockss"
+#
+# The directory to put the resulting output xml file(s) - should be web accessible
+#ODIR="/www/lockss-props/html/network/titledb"
+# Default is "./"
+#
+# The filename to use for the output file(s).  The filename should end in ".xml"
+# Output for subdirectories will use "filename-subdirectoryname.xml"
+#OFILE="titledb.xml"
+# Default is "titledb.xml"
+#
+# The parameters used to determine which AUs to release for processing
+#TDBXMLOPTS="-P"
+# Default is "-P" which represents all released content
+#
+###
+
