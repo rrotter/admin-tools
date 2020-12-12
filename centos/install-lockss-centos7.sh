@@ -69,8 +69,8 @@ function createuser {
 }
 
 # Create the two LOCKSS users
-createuser 'lockss' 1002 104
-createuser 'lcap' 1001 103
+createuser 'lockss' 1001 103
+createuser 'lcap' 1002 104
 
 # Allow lcap user to sudo
 echo "lcap ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/lcap
