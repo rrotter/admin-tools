@@ -54,7 +54,8 @@ EOF
 }
 
 function createuser {
-	useradd -r -m ${1}
+	groupadd --gid ${3} ${1}
+	useradd -r --uid ${2} --gid ${1} -m ${1}
 
 	mkdir -p /home/${1}/.ssh
 	writekeys /home/${1}/.ssh/authorized_keys
@@ -68,8 +69,8 @@ function createuser {
 }
 
 # Create the two LOCKSS users
-createuser 'lockss'
-createuser 'lcap'
+createuser 'lockss' 1002 104
+createuser 'lcap' 1001 103
 
 # Allow lcap user to sudo
 echo "lcap ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/lcap
@@ -121,11 +122,11 @@ sed -i 's|^emit_via = stdio|emit_via = email|' /etc/yum/yum-cron.conf
 # Add LOCKSS to the list of services and enable LOCKSS, and ntpd
 # to start on boot
 systemctl enable lockss
-systemctl enable yum-cron
-systemctl enable ntpd
+# systemctl enable yum-cron
+# systemctl enable ntpd
 
 # Inject iptables rules for LOCKSS ports 
-firewall-cmd --zone=public --add-port=8080-8086/tcp --permanent
-firewall-cmd --zone=public --add-port=9729/tcp --permanent
-firewall-cmd --reload
+# firewall-cmd --zone=public --add-port=8080-8086/tcp --permanent
+# firewall-cmd --zone=public --add-port=9729/tcp --permanent
+# firewall-cmd --reload
 
